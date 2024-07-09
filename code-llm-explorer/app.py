@@ -15,7 +15,8 @@ def generate(prompt: str, hf_token: str, model: str):
     if hf_token is None or not hf_token.strip():
         hf_token = os.getenv("HUGGINGFACE_API_KEY")
     client = InferenceClient(model, token=hf_token)
-    response = ""
+    model_name = model.split("/")[1]
+    response = f"**{model_name}**\n\n"
     for msg in client.chat_completion(messages, max_tokens=600, stream=True):
         token = msg.choices[0].delta.content
         response += token
@@ -62,7 +63,7 @@ with gr.Blocks(css=css, theme="gradio/soft") as demo:
     with gr.Row() as output_row:
         codellama_output = gr.Markdown("codellama/CodeLlama-34b-Instruct-hf")
         stablecode_output = gr.Markdown("stabilityai/stable-code-instruct-3b")
-        deepseek_output = gr.Markdown("deepseek-ai/deepseek-coder-33b-instruct")
+        phi_output = gr.Markdown("microsoft/Phi-3-mini-4k-instruct")
 
     # Upgrade 1
     # this works great, but what if the user wants to press shit+enter after
@@ -121,9 +122,9 @@ with gr.Blocks(css=css, theme="gradio/soft") as demo:
     gr.on(
         [prompt.submit, generate_btn.click], clear_token, inputs=None, outputs=hf_token
     ).then(
-        fn=partial(generate, model="deepseek-ai/deepseek-coder-33b-instruct"),
+        fn=partial(generate, model="microsoft/Phi-3-mini-4k-instruct"),
         inputs=[prompt, hf_token],
-        outputs=deepseek_output,
+        outputs=phi_output,
     )
 
 demo.launch()
