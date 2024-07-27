@@ -12,3 +12,4 @@
 | Data Prep Steps | Colab |
 | --------------- | ----- |
 | Notebook containig Data Preparation for Pretraining with following steps <br> 1. Filtering short samples <br> 2. Removing examples that have repeating paragraphs within the example <br> 3. Removing duplicate examples/rows within the dataset <br> 4. Removing non english examples | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1OBuw_npCwOac1vl0AAAlxXU3YZdbsD0i?usp=sharing) |
+| Data Packing:<br>Steps involving how to tokenize the data and how to pack small examples <br>together for faster training | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1rRaPIkpBnVnni2WSA6OjPR2pXPnWd6HT?usp=sharing) |
