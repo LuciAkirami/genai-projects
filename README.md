@@ -11,4 +11,5 @@
 
 Projects To Do:
 
-JSON-LLM
+- [ ] JSON-LLM
+- [ ] Connected.AI
