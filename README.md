@@ -13,3 +13,4 @@ Projects To Do:
 
 - [ ] JSON-LLM
 - [ ] Connected.AI
+- [ ] Auto Resume Generator (Based on Job Description)
