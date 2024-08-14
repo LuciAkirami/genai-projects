@@ -26,7 +26,7 @@ system_prompt = (
 )
 
 # create a list for the messages conversation
-conv = []
+conv = [{"role": "system", "content": system_prompt}]
 
 # instantiate a chroma client
 chroma_client = chromadb.Client()
@@ -159,6 +159,9 @@ def create_queries(prompt):
     query_list = ollama.chat(model="llama3", messages=query_convo)["message"]["content"]
 
     try:
+        # convert the llms string response to an actual python list
+        # llm_ouput -> "['hello','hello2']" which is a string as it generates string response not list
+        # we need -> ['hello','hello2'] which is a list
         query_list = ast.literal_eval(query_list)
         return query_list
     except:
@@ -194,7 +197,7 @@ while True:
     print(query_list)
 
     relevant_conv = retrieve_conversations(query_list, 2)
-    final_prompt = f"Sytem Prompt: \n{system_prompt} \n\nQuestion: \n{user_prompt} \n\nPrevious Memory Context: \n{relevant_conv} \nEND of Previous Memory Context"
+    final_prompt = f"Question: \n{user_prompt} \n\nPrevious Memory Context: \n{relevant_conv} \nEND of Previous Memory Context"
 
     # # to check the if the final prompt is containing the relevant messages
     print(f"Final Prompt: \n{final_prompt}")
