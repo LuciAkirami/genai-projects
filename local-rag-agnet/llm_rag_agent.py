@@ -5,6 +5,7 @@ from psycopg.rows import dict_row
 import uuid
 import ast
 from tqdm import tqdm
+from colorama import Fore
 
 # DB Parameters
 DB_PARAMS = {
@@ -19,10 +20,10 @@ DB_PARAMS = {
 system_prompt = (
     "You are an AI assistant with the ability to recall and use previous conversations with the user. "
     "For each user question, you will be given a relevant portion of the conversation history as context. "
-    "If the provided context directly answers the user's query, incorporate that information seamlessly into your response. "
+    "If the provided context directly answers the user's query, seamlessly integrate that information into your response without any reference to the context or prior conversations. "
     "If the context is not relevant to the current query, ignore it and respond as you normally would. "
-    "Do not reference the conversation history or mention that you are using it in your response. Simply provide the most accurate and helpful answer, "
-    "as if you were responding without access to prior context."
+    "Do not reference the conversation history, mention that you are using prior context, or use phrases like 'as discussed before' or 'building on our previous conversation.' "
+    "Your response should be as if it was generated independently, providing the most accurate and helpful answer based solely on the current query."
 )
 
 # create a list for the messages conversation
@@ -99,7 +100,8 @@ def retrieve_conversations(query_list, n):
 
         for conversation in similar_conv:
             if conversation not in similar_documents:
-                similar_documents.append(conversation)
+                if "yes" in is_retrieved_conversation_relevant(query, conversation):
+                    similar_documents.append(conversation)
 
     similar_documents = "\n\n".join(similar_documents)
 
@@ -168,6 +170,31 @@ def create_queries(prompt):
         return prompt
 
 
+# checking if retrieved conversation is correct or not
+def is_retrieved_conversation_relevant(query, conversation):
+    relevance_check_msg = (
+        "You are an AI designed to determine the relevance of a provided context to a user's query. "
+        "You will receive a user query that includes a context retrieved from conversation history. "
+        "Your task is to analyze whether the provided context is directly relevant and useful in answering the user's query. "
+        "If the context is relevant to the query, respond with 'yes'. If the context is not relevant, respond with 'no'. "
+        "Provide only 'yes' or 'no' as your response, without any explanations."
+    )
+
+    relevance_convo = [
+        {"role": "system", "content": relevance_check_msg},
+        {
+            "role": "user",
+            "content": f"Query: {query} Retrieved Context: {conversation}",
+        },
+    ]
+
+    response = ollama.chat(model="llama3", messages=relevance_convo)["message"][
+        "content"
+    ]
+
+    return response
+
+
 # fetch the conversations and create a vectordb out of it
 conversations = fetch_conversations()
 vectordb = create_vectordb(conversations=conversations)
@@ -178,7 +205,7 @@ def streaming_response(prompt):
     output = ollama.chat(model="llama3", messages=prompt, stream=True)
     response = ""
 
-    print("\nASSISTANT: ")
+    print(Fore.LIGHTGREEN_EX + "\nASSISTANT: ")
     for chunk in output:
         content = chunk["message"]["content"]
         response += content
@@ -189,12 +216,12 @@ def streaming_response(prompt):
 
 
 while True:
-    user_prompt = input("USER: \n")
+    user_prompt = input(Fore.WHITE + "USER: \n")
     if user_prompt[-4:].lower() == "exit":
         break
 
     query_list = create_queries(user_prompt)
-    print(query_list)
+    print(Fore.YELLOW + "Performing Vector Search with following Queries: ", query_list)
 
     relevant_conv = retrieve_conversations(query_list, 2)
     final_prompt = f"Question: \n{user_prompt} \n\nPrevious Memory Context: \n{relevant_conv} \nEND of Previous Memory Context"
