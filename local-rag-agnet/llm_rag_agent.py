@@ -1,20 +1,8 @@
-import ollama
-import chromadb
-import psycopg
-from psycopg.rows import dict_row
-import uuid
-import ast
-from tqdm import tqdm
+from database import fetch_conversations, save_conversation
+from vectordb import create_vectordb, retrieve_conversations, save_conv_vectordb
 from colorama import Fore
-
-# DB Parameters
-DB_PARAMS = {
-    "dbname": "memory_agent",
-    "user": "example_user",
-    "password": "12345",
-    "host": "localhost",
-    "port": "5432",
-}
+import ollama
+import ast
 
 # create a system prompt
 system_prompt = (
@@ -28,98 +16,6 @@ system_prompt = (
 
 # create a list for the messages conversation
 conv = [{"role": "system", "content": system_prompt}]
-
-# instantiate a chroma client
-chroma_client = chromadb.Client()
-
-
-# fetch the conversation from the database
-def fetch_conversations():
-    conn = psycopg.connect(**DB_PARAMS)
-
-    with conn.cursor(row_factory=dict_row) as cursor:
-        fetched_data = cursor.execute("SELECT * FROM conversations;")
-        conversation = fetched_data.fetchall()
-
-    conn.close()
-
-    return conversation
-
-
-# save a conversation in the database
-def save_conversation(prompt, response):
-    conn = psycopg.connect(**DB_PARAMS)
-
-    with conn.cursor(row_factory=dict_row) as cursor:
-        cursor.execute(
-            """
-            INSERT INTO conversations (timestamp, prompt, response)
-            VALUES (CURRENT_TIMESTAMP, %s, %s);
-            """,
-            (prompt, response),
-        )
-        conn.commit()
-    conn.close()
-
-
-# create a vector database and store the conversation embeddings
-def create_vectordb(conversations):
-    # delete if collection already exists
-    try:
-        chroma_client.delete_collection("conv-collection")
-    except Exception as e:
-        pass
-
-    vectordb = chroma_client.create_collection("conv-collection")
-
-    for conversation in conversations:
-        prompt_response_pair = f"Prompt: \n{conversation['prompt']} \nResponse: \n{conversation['response']}"
-        conv_embeddings = ollama.embeddings(
-            model="nomic-embed-text", prompt=prompt_response_pair
-        )["embedding"]
-        vectordb.add(
-            ids=[str(uuid.uuid4())],
-            embeddings=[conv_embeddings],
-            documents=[prompt_response_pair],
-        )
-
-    return vectordb
-
-
-# retrieve the most similar conversations
-def retrieve_conversations(query_list, n):
-    similar_documents = []
-
-    for query in tqdm(query_list, desc="Extracting Similar Queries"):
-        query_embeddings = ollama.embeddings(model="nomic-embed-text", prompt=query)[
-            "embedding"
-        ]
-        similar_conv = vectordb.query(query_embeddings=[query_embeddings], n_results=n)[
-            "documents"
-        ][0]
-
-        for conversation in similar_conv:
-            if conversation not in similar_documents:
-                if "yes" in is_retrieved_conversation_relevant(query, conversation):
-                    similar_documents.append(conversation)
-
-    similar_documents = "\n\n".join(similar_documents)
-
-    return similar_documents
-
-
-# save the conversation in the vector database
-def save_conv_vectordb(prompt, response):
-    prompt_response_pair = f"Prompt: \n{prompt} \nResponse: \n{response}"
-    conv_embeddings = ollama.embeddings(
-        model="nomic-embed-text", prompt=prompt_response_pair
-    )["embedding"]
-
-    vectordb.add(
-        ids=[str(uuid.uuid4())],
-        embeddings=[conv_embeddings],
-        documents=[prompt_response_pair],
-    )
 
 
 # create multiple queries from user's prompt, so to retrieve accurate conversation histories
@@ -170,31 +66,6 @@ def create_queries(prompt):
         return prompt
 
 
-# checking if retrieved conversation is correct or not
-def is_retrieved_conversation_relevant(query, conversation):
-    relevance_check_msg = (
-        "You are an AI designed to determine the relevance of a provided context to a user's query. "
-        "You will receive a user query that includes a context retrieved from conversation history. "
-        "Your task is to analyze whether the provided context is directly relevant and useful in answering the user's query. "
-        "If the context is relevant to the query, respond with 'yes'. If the context is not relevant, respond with 'no'. "
-        "Provide only 'yes' or 'no' as your response, without any explanations."
-    )
-
-    relevance_convo = [
-        {"role": "system", "content": relevance_check_msg},
-        {
-            "role": "user",
-            "content": f"Query: {query} Retrieved Context: {conversation}",
-        },
-    ]
-
-    response = ollama.chat(model="llama3", messages=relevance_convo)["message"][
-        "content"
-    ]
-
-    return response
-
-
 # fetch the conversations and create a vectordb out of it
 conversations = fetch_conversations()
 vectordb = create_vectordb(conversations=conversations)
@@ -223,7 +94,7 @@ while True:
     query_list = create_queries(user_prompt)
     print(Fore.YELLOW + "Performing Vector Search with following Queries: ", query_list)
 
-    relevant_conv = retrieve_conversations(query_list, 2)
+    relevant_conv = retrieve_conversations(vectordb, query_list, 2)
     final_prompt = f"Question: \n{user_prompt} \n\nPrevious Memory Context: \n{relevant_conv} \nEND of Previous Memory Context"
 
     # # to check the if the final prompt is containing the relevant messages
@@ -235,8 +106,8 @@ while True:
     # append the response to the list of conversations
     conv.append({"role": "assistant", "content": response})
 
-    # # store the conversation in the sql db
-    # save_conversation(user_prompt, response)
+    # store the conversation in the sql db
+    save_conversation(user_prompt, response)
 
-    # # store the conversation in the chromadb
-    # save_conv_vectordb(user_prompt, response)
+    # store the conversation in the chromadb
+    save_conv_vectordb(vectordb, user_prompt, response)
